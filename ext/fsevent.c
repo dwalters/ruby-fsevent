@@ -49,6 +49,9 @@ void watch_directory(VALUE self) {
   VALUE rb_latency = rb_iv_get(self, "@latency");
   CFAbsoluteTime latency = NUM2DBL(rb_latency);
 
+  VALUE rb_since_when = rb_iv_get(self, "@since_when");
+  FSEventStreamEventId since_when = NUM2ULL(rb_since_when);
+
   FSEventStreamContext context;
   context.version = 0;
   context.info = (VALUE *)self;
@@ -60,7 +63,7 @@ void watch_directory(VALUE self) {
     &callback,
     &context,
     pathsToWatch,
-    kFSEventStreamEventIdSinceNow,
+    since_when,
     latency,
     kFSEventStreamCreateFlagNone
   );
@@ -72,6 +75,7 @@ void watch_directory(VALUE self) {
 
 static VALUE t_init(VALUE self) {
   rb_iv_set(self, "@latency", rb_float_new(0.5));
+  rb_iv_set(self, "@since_when", ULL2NUM(kFSEventStreamEventIdSinceNow));
   return self;
 }
 
@@ -113,6 +117,11 @@ static VALUE t_restart(VALUE self) {
   return self;
 }
 
+static VALUE t_latest_event_id(VALUE self) {
+  FSEventStreamEventId eventId = FSEventStreamGetLatestEventId(stream);
+  return ULL2NUM(eventId);
+}
+
 void delegate_signal_to_ruby(int signal) {
   VALUE signal_mod = rb_const_get(rb_cObject, rb_intern("Signal"));
   if (rb_funcall(signal_mod, rb_intern("handles?"), 1, INT2FIX(signal)) == Qtrue) {
@@ -140,9 +149,13 @@ void Init_fsevent() {
   rb_define_method(fsevent_class, "start", t_start, 0);
   rb_define_method(fsevent_class, "stop", t_stop, 0);
   rb_define_method(fsevent_class, "restart", t_restart, 0);
+  rb_define_method(fsevent_class, "latest_event_id", t_latest_event_id, 0);
 
   rb_define_attr(fsevent_class, "latency", 1, 1);
   rb_define_attr(fsevent_class, "registered_directories", 1, 1);
+  rb_define_attr(fsevent_class, "since_when", 1, 1);
+
+  rb_define_const(fsevent_class, "SinceNow", ULL2NUM(kFSEventStreamEventIdSinceNow));
 
   register_signal_delegation();
 }
